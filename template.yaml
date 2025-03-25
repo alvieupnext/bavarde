@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Resources:
+  # Chatbot Lambda Function
+  ChatbotLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: BavardeChatbot
+      Timeout: 18 # Increase timeout to 10 seconds
+      Handler: functions/chatbot/handler.lambda_handler
+      Runtime: python3.12
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:prod/Bavarde/OpenAIKey-*"
+      Environment:
+        Variables:
+          SECRET_NAME: "prod/Bavarde/OpenAIKey"
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /chat
+            Method: post
+            RestApiId: !Ref ChatAPI
+
+  # JWT Authorizer Lambda
+  JWTAuthorizer:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: BavardeJWTAuthorizer
+      Handler: functions/authorizer/handler.lambda_handler
+      Runtime: python3.12
+      Environment:
+        Variables:
+          JWT_SECRET: "N3vXH72R1X7DkfLz90FqWtuLGvOw7mLBDXUO8WZYYtk"
+
+  # API Gateway
+  ChatAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: BavardeAPI
+      StageName: prod
+      Auth:
+        DefaultAuthorizer: JWTAuth
+        Authorizers:
+          JWTAuth:
+            FunctionArn: !GetAtt JWTAuthorizer.Arn
+
+Outputs:
+  ChatbotApiEndpoint:
+    Description: "API Gateway endpoint"
+    Value: !Sub "https://${ChatAPI}.execute-api.${AWS::Region}.amazonaws.com/prod/chat"
